@@ -136,13 +136,28 @@ Create a `.env` file.
 TELEGRAM_BOT_TOKEN=<telegram_bot_token>
 TELEGRAM_CHAT_ID=<telegram_chat_id>
 
-SMTP_HOST=
-SMTP_PORT=
-SMTP_USERNAME=
-SMTP_PASSWORD=
+DB_PATH = <db_path_label>
 
-SIMILARITY_THRESHOLD=0.80
-TOP_K_RESULTS=20
+SMTP_SERVER = <smtp_server>
+SMTP_PORT = <port>
+
+SENDER_EMAIL = ""
+SENDER_PASSWORD = ""
+
+RECEIVER_EMAIL = ""
+
+JOB_EMBED_MODEL = ""
+RERANK_MODEL = ""
+USE_RERANKER = False
+
+SERPAPI_API_KEY = <serpapi_api_key>
+
+ENABLE_RECENCY_BOOST = True
+MAX_RECENCY_BOOST = 1.5            # maximum multiplier for very recent jobs
+RECENCY_HALF_LIFE_HOURS = 24       # hours until boost halves to ~1.0
+
+THRESHOLD = 0.1
+TOP_K = 20
 ```
 
 ---
