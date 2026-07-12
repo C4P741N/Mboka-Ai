@@ -2,8 +2,10 @@ import os
 import json
 import sqlite3
 import hashlib
+from typing import Dict
 import requests
 from datetime import datetime, timezone, timedelta
+import html
 
 import math
 from dateutil import parser as dateparser
@@ -58,7 +60,15 @@ REST APIs, OData, React, Azure, Docker, Kubernetes, SQL Server, PostgreSQL, CI/C
 I am only interested in fully remote positions or jobs located in Kenya.
 """
 
-KEYWORDS = [".net", "c#", "react", "asp.net", "aspnet", "dotnet", "azure", "docker", "api", "backend"]
+KEYWORDS = [".net", "c#", "react", "asp.net", "aspnet", "dotnet", "azure", "docker", "api", "backend", "software engineer", "developer", "engineer", "software developer"]
+
+FONT = "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif"
+INK = "#16232E"      # headings
+BODY = "#526070"     # body copy
+MUTED = "#97A2AC"     # dividers, empty-state text
+BORDER = "#E3E8ED"    # card border
+ACCENT = "#0F766E"    # apply buttons (the one accent color)
+ 
 
 # ----------------------------
 # Storage (unchanged)
@@ -152,15 +162,17 @@ def send_telegram_message(text):
 # ----------------------------
 # AI‑powered job source (NEW, replaces static list)
 # ----------------------------
-def build_search_query():
+def build_search_query() -> str:
     """
     Build a Google‑friendly search query from your profile & keywords.
     This tells the AI search engine exactly what you're looking for.
     """
     # Use the most important technologies as required terms
-    must_include = ' AND '.join(f'"{kw}"' for kw in ['.net', 'c#', 'react'])
+    # must_include = ' AND '.join(f'"{kw}"' for kw in ['.net', 'c#', 'react'])
     optional_include = ' OR '.join(KEYWORDS)  # just in case
-    return f'({must_include}) ({optional_include}) (engineer OR developer)'
+
+    return optional_include
+    # return f'({must_include}) ({optional_include}) (engineer OR developer)'
 
 def fetch_jobs_from_serpapi():
     """
@@ -179,6 +191,8 @@ def fetch_jobs_from_serpapi():
         "q": query,
         "api_key": SERPAPI_API_KEY,
         "hl": "en",
+        "google_domain": "google.co.ke",
+        "location": "Kenya"
     }
 
     try:
@@ -194,7 +208,16 @@ def fetch_jobs_from_serpapi():
         title = result.get("title", "")
         company = result.get("company_name", "")
         location = result.get("location", "")
-        url = result.get("source_link") or result.get("share_link", "")
+        
+        source_title = result.get("via")
+        source_link = result.get("source_link") or result.get("share_link", "")
+
+        apply_options = []
+        for url_option in result.get("apply_options") or {}.values():
+            apply_options.append({
+                "title": url_option.get("title"),
+                "url": url_option.get("link")
+            })
 
           # Attempt to grab a raw posting date
         posted_raw = None
@@ -218,8 +241,12 @@ def fetch_jobs_from_serpapi():
             "company": company,
             "location": location,
             "description": description,
-            "url": url,
-            "posted_raw": posted_raw
+            "apply_options": apply_options,
+            "posted_raw": posted_raw,
+            "source_link": [{
+                "title": source_title,
+                "url": source_link
+            }]
 
         })
 
@@ -357,32 +384,105 @@ def format_alert(job, score):
 # ----------------------------
 # Build html job posting
 # ----------------------------
-def assemble_job_card(job):
-      return f"""
-    <div style="border:1px solid #ddd; border-radius:8px; padding:16px; margin-bottom:20px;">
-        <h2 style="margin:0; color:#2c3e50;">{job.get('title')}</h2>
-        <p style="margin:6px 0;">
-            <strong>{job.get('company')}</strong><br>
-            📍 {job.get('location')}
+
+def _render_apply_buttons(apply_options: Dict[str, str]) -> str:
+    """Render one styled button per apply option. Each option needs 'title' and 'url'."""
+    if not apply_options:
+        return (
+            f'<p style="margin:0; color:{MUTED}; font-size:13px; '
+            'font-style:italic;">No application links available</p>'
+        )
+ 
+    buttons = []
+    for option in apply_options:
+        title = html.escape(str(option.get("title") or "Apply now"))
+        url = html.escape(str(option.get("url") or "#"), quote=True)
+        buttons.append(
+            f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
+            'style="display:inline-block; padding:10px 16px; '
+            f'margin:0 8px 8px 0; background:{ACCENT}; color:#ffffff; '
+            'text-decoration:none; border-radius:6px; font-size:14px; '
+            f'font-weight:600; font-family:{FONT};">'
+            f'{title}</a>'
+        )
+    return "".join(buttons)
+ 
+ 
+def render_job_card(job: Dict[str, str]) -> str:
+    """
+    Render a single job posting as a styled HTML card.
+ 
+    `job["apply_options"]` should be a list of dicts shaped like:
+        [{"title": "Apply on LinkedIn", "url": "https://..."},
+         {"title": "Apply on company site", "url": "https://..."}]
+ 
+    Missing fields and an empty/absent apply_options list degrade
+    gracefully so a malformed job entry never breaks the layout.
+    """
+    title = html.escape(str(job.get("title") or "Untitled position"))
+    company = html.escape(str(job.get("company") or ""))
+    location = html.escape(str(job.get("location") or ""))
+    description = html.escape(str(job.get("description") or "")).replace("\n", "<br>")
+ 
+    meta_parts = []
+    if company:
+        meta_parts.append(f'<strong style="color:{INK};">{company}</strong>')
+    if location:
+        meta_parts.append(f'<span>\U0001F4CD {location}</span>')
+ 
+    meta_html = ""
+    if meta_parts:
+        divider = f'<span style="color:{MUTED}; margin:0 8px;">&middot;</span>'
+        meta_html = (
+            f'<p style="margin:0 0 14px 0; color:{BODY}; font-size:14px;">'
+            f'{divider.join(meta_parts)}</p>'
+        )
+ 
+    options = job.get("apply_options") or job.get("source_link")
+
+    apply_buttons = _render_apply_buttons(options)
+ 
+    return f"""
+    <div style="
+        width:100%;
+        max-width:640px;
+        box-sizing:border-box;
+        border:1px solid {BORDER};
+        border-radius:10px;
+        padding:24px;
+        margin-bottom:20px;
+        background:#ffffff;
+        font-family:{FONT};
+        box-shadow:0 1px 2px rgba(22,35,46,0.04), 0 1px 6px rgba(22,35,46,0.05);
+    ">
+        <h2 style="margin:0 0 8px 0; color:{INK}; font-size:19px; font-weight:700; line-height:1.3;">
+            {title}
+        </h2>
+ 
+        {meta_html}
+ 
+        <p style="
+            margin:0 0 18px 0;
+            color:{BODY};
+            font-size:14px;
+            line-height:1.6;
+            display:-webkit-box;
+            -webkit-line-clamp:3;
+            -webkit-box-orient:vertical;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            word-break:break-word;
+        ">
+            {description}
         </p>
-
-        <p>{job.get('description')}</p>
-
-        <a href="{job.get('url')}"
-           style="
-               display:inline-block;
-               padding:10px 18px;
-               background:#007BFF;
-               color:white;
-               text-decoration:none;
-               border-radius:5px;
-           ">
-            Apply Now
-        </a>
+ 
+        <div>
+            {apply_buttons}
+        </div>
     </div>
     """
 
-def assemble_email(job_cards):
+def render_email(job_cards):
     return f"""
     <html>
         <head>
@@ -442,8 +542,6 @@ def assemble_email(job_cards):
 
             <div class="container">
 
-            <h1>Latest Job Opportunities</h1>
-
             <p>We found the following jobs that may interest you.</p>
 
             {job_cards}
@@ -462,9 +560,9 @@ def assemble_email(job_cards):
 
 def send_email_notification(job_cards):
 
-    server = None
+    # server = None
     try:
-        html_content = assemble_email(job_cards)
+        html_content = render_email(job_cards)
 
         # Create email object
         msg = MIMEMultipart()
@@ -485,16 +583,16 @@ def send_email_notification(job_cards):
         # server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
 
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-                server.connect()
+                # server.connect()
                 server.login(SENDER_EMAIL, SENDER_PASSWORD)
                 server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
 
         print("Email sent successfully!")
 
     except Exception as e:
-            print(f"Failed to send email: {e}")
-    finally:
-        server.quit() # Close the connection
+        print(f"Failed to send email: {e}")
+    # finally:
+        # server.quit() # Close the connection
 
 
 
@@ -525,7 +623,7 @@ def run():
         if score >= THRESHOLD:
             # message = format_alert(job, score)
             # send_telegram_message(message)
-            job_cards += assemble_job_card(job)
+            job_cards += render_job_card(job)
             save_job(job, score)
 
     if len(job_cards) != 0:
