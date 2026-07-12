@@ -7,10 +7,20 @@ services:
     container_name: job-tracker-debug
     ports:
       - "5678:5678"
+    env_file:
+      - .env
     environment:
-      TELEGRAM_BOT_TOKEN: "your_bot_token"
-      TELEGRAM_CHAT_ID: "your_chat_id"
-      SERPAPI_API_KEY: "b497c9cb4a0666f06428b6823841473eec0ea58c7f9378670785f2cec5236a24"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY}
+      DB_PATH: ${DB_PATH}
+      SMTP_SERVER: ${SMTP_SERVER}
+      SMTP_PORT: ${SMTP_PORT}
+      SENDER_EMAIL: ${SENDER_EMAIL}
+      SENDER_PASSWORD: ${SENDER_PASSWORD}
+      RECEIVER_EMAIL: ${RECEIVER_EMAIL}
+      JOB_EMBED_MODEL: ${JOB_EMBED_MODEL}
+      RERANK_MODEL: ${RERANK_MODEL}
     stdin_open: true
     tty: true
     restart: "unless-stopped"
