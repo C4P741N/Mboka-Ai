@@ -26,6 +26,9 @@ RECENCY_HALF_LIFE_HOURS = float(os.getenv("RECENCY_HALF_LIFE_HOURS"))
 THRESHOLD = float(os.getenv("THRESHOLD"))
 TOP_K = int(os.getenv("TOP_K"))
 
+if not SENDER_EMAIL or not SENDER_PASSWORD:
+    raise ValueError("Missing environment variables! Set them in .env or system.")
+
 
 PROFILE_TEXT = """
 Senior .NET / React engineer specializing in C#, .NET Core, ASP.NET Core, Entity Framework Core,
